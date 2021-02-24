@@ -1,0 +1,105 @@
+version: '2'
+
+services:
+  elasticsearch:
+    image: eeacms/elk-elasticsearch:6.8
+    cap_add:
+      - IPC_LOCK
+    restart: always
+    ports:
+      - 9200:9200
+    volumes:
+      - elasticsearchDataDevMaster1:/usr/share/elasticsearch/data
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    mem_limit: 2g
+    environment:
+      - cluster.name=docker-cluster
+      - bootstrap.memory_lock=true
+      - node.master=true
+      - "ES_JAVA_OPTS=-Xms1G -Xmx1G"
+      - "ELASTICSEARCH_MASTER=YES"
+
+      - SERVERNAME=changeme
+      - CHECKHEALTH=127.0.0.1
+      #pls, must match below!
+      - "LOGSTASH_RW_USERNAME=changeme"
+      - "LOGSTASH_RW_PASSWORD=changeme"
+      - "KIBANA_RW_USERNAME=changeme"
+      - "KIBANA_RW_PASSWORD=changeme"
+
+      #in case you don't want public read only access, uncommend and set
+      #KIBANA_RO_USERNAME: "changeme"
+      #KIBANA_RO_PASSWORD: "changeme"
+    networks:
+      - esnet
+
+  elasticsearch_slave_1:
+    image: eeacms/elk-elasticsearch:6.8
+    cap_add:
+      - IPC_LOCK
+    restart: always
+    volumes:
+      - elasticsearchDataDevSlave1:/usr/share/elasticsearch/data
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    mem_limit: 2g
+    environment:
+      - cluster.name=docker-cluster
+      - bootstrap.memory_lock=true
+      - node.master=false
+      - "ES_JAVA_OPTS=-Xms1G -Xmx1G"
+      - "ELASTICSEARCH_MASTER=elasticsearch"
+    networks:
+      - esnet
+
+  kibana:
+    image: eeacms/elk-kibana:6.8
+    restart: always
+    ports:
+      - "443:5601"
+    volumes:
+      - /backups:/backups
+      - /etc/pki/tls/certs/server.crt:/ssl/server.crt:ro
+      - /etc/pki/tls/private/server.key:/ssl/server.key:ro
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      #pls, must match above!
+      KIBANA_RW_USERNAME: "changeme"
+      KIBANA_RW_PASSWORD: "changeme"
+      ELASTICSEARCH_URL: "https://elasticsearch:9200"
+      ENABLE_SSL: "YES"
+    networks:
+      - esnet
+    depends_on:
+      - "elasticsearch"
+
+  sysctl:
+    network_mode: none
+    image: rawmind/alpine-sysctl:0.1
+    privileged: true
+    environment:
+      - "SYSCTL_KEY=vm.max_map_count"
+      - "SYSCTL_VALUE=262144"
+
+volumes:
+  elasticsearchDataDevMaster1:
+    driver: local
+  elasticsearchDataDevSlave1:
+    driver: local
+  configurationKibana:
+    driver: local
+
+networks:
+  esnet:
+    driver: bridge
